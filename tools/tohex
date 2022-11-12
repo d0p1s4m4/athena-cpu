@@ -1,0 +1,2 @@
+#!/bin/sh
+od -An -tx1 -w1 -v $1 > $2
