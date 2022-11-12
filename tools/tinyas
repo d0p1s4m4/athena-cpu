@@ -37,6 +37,33 @@ REGISTERS = {
 
     # proxy name
     'zero': 0b00000,
+    'a0':   0b00001,
+    'a1':   0b00010,
+    'a2':   0b00011,
+    'a3':   0b00100,
+    'a4':   0b00101,
+    'a5':   0b00110,
+    'a6':   0b00111,
+    'a7':   0b01000,
+    'v0':   0b01001,
+    'v1':   0b01010,
+    's0':   0b01011,
+    's1':   0b01100,
+    's2':   0b01101,
+    's3':   0b01110,
+    's4':   0b01111,
+    's5':   0b10000,
+    's6':   0b10001,
+    't0':   0b10010,
+    't1':   0b10011,
+    't2':   0b10100,
+    't3':   0b10101,
+    't4':   0b10110,
+    't5':   0b10111,
+    't6':   0b11000,
+    'k0':   0b11001,
+    'k1':   0b11010,
+    'at':   0b11011,
     'sp':   0b11100,
     'gp':   0b11101,
     'fp':   0b11110,
@@ -49,23 +76,22 @@ FUNCS = {
     'and':     0b000101,
     'div':     0b000110,
     'divu':    0b000111,
+    'mod':     0b010011,
+    'modu':    0b010100,
     'mult':    0b001000,
     'multu':   0b001001,
     'nor':     0b001010,
-    'nop':     0b000000,
     'or':      0b001011,
     'sll':     0b001101,
+    'sllr':    0b010000,
+    'sra':     0b001111,
+    'srar':    0b010001,
     'srl':     0b001110,
+    'srlr':    0b010010,
     'sub':     0b000011,
     'subu':    0b000100,
-    'syscall': 0b111111,
+    'trap':    0b111111,
     'xor':     0b001100,
-}
-
-SFUNCS = {
-    'eret': 0b000001,
-    'csrr': 0b111110,
-    'csrw': 0b111111
 }
 
 OPCODES = {
@@ -73,13 +99,13 @@ OPCODES = {
     'andiu': 0b000010,
     'andi':  0b000101,
     'beq':   0b001110,
-    'bne':   0b001111,
-    'blt':   0b010000,
     'bgt':   0b010001,
+    'blt':   0b010000,
+    'bne':   0b001111,
     'call':  0b001101,
     'jmp':   0b001010,
     'lih':   0b001011,
-    'lil':   0b001100,
+    'loadu': 0b001100,
     'load':  0b001001,
     'ori':   0b000110,
     'store': 0b001000,
@@ -91,10 +117,18 @@ OPCODES = {
 def rformat(func, dest, r1, r2):
     ret = REGISTERS[dest] << 6
     ret |= REGISTERS[r1] << 11
-    if func == 'sll' or func == 'srl':
+    if func == 'sll' or func == 'sra' or func == 'srl':
         ret |= int(r2) << 21
     else:
         ret |= REGISTERS[r2] << 16
+    ret |= FUNCS[func] << 26
+    return ret
+
+def r4format(func, dest1, dest2, r1, r2):
+    ret = REGISTERS[dest1] << 6
+    ret |= REGISTERS[dest2] << 11
+    ret |= REGISTERS[r1] << 21
+    ret |= REGISTERS[r2] << 16
     ret |= FUNCS[func] << 26
     return ret
 
@@ -128,46 +162,52 @@ def lsformat(opcode, r1, r2, width, offset):
 
 INSTRS = {
     'add': rformat,
-    'addu': rformat,
     'addi': iformat,
     'addiu': iformat,
+    'addu': rformat,
     'and': rformat,
     'andi': iformat,
     'b': lambda op, r1, r2, offset: iformat('beq', 'zero', 'zero', offset),
     'beq': iformat,
     'beqz': lambda op, r1, r2, offset: iformat('beq', r1, 'zero', offset),
-    'bne': iformat,
-    'bnez': lambda op, r1, r2, offset: iformat('bne', r1, 'zero', offset),
-    'blt': iformat,
-    'bltz': lambda op, r1, r2, offset: iformat('blt', r1, 'zero', offset),
     'bgt': iformat,
     'bgtz': lambda op, r1, r2, offset: iformat('bgt', r1, 'zero', offset),
+    'blt': iformat,
+    'bltz': lambda op, r1, r2, offset: iformat('blt', r1, 'zero', offset),
+    'bne': iformat,
+    'bnez': lambda op, r1, r2, offset: iformat('bne', r1, 'zero', offset),
     'call': jformat,
     'div': rformat,
     'divu': rformat,
-    'eret': rsformat,
     'jmp': jformat,
     'lb': lambda op, r1, r2, offset: lsformat('load', r1, r2, 0b00, offset),
+    'lbu': lambda op, r1, r2, offset: lsformat('loadu', r1, r2, 0b00, offset),
     'lh': lambda op, r1, r2, offset: lsformat('load', r1, r2, 0b01, offset),
-    'lw': lambda op, r1, r2, offset: lsformat('load', r1, r2, 0b10, offset),
+    'lhu': lambda op, r1, r2, offset: lsformat('loadu', r1, r2, 0b01, offset),
     'lih': iformat,
-    'lil': iformat,
-    'mult': rformat,
-    'multu': rformat,
+    'lw': lambda op, r1, r2, offset: lsformat('load', r1, r2, 0b10, offset),
+    'mod': rformat,
+    'modu': rformat,
+    'mult': r4format,
+    'multu': r4format,
     'nor': rformat,
-    'nop': lambda x: rformat('nop', 'r0', 'r0', 'r0'),
+    'nop': lambda x: rformat('add', 'r0', 'r0', 'r0'),
     'or': rformat,
     'ori': iformat,
-    'sll': rformat,
-    'srl': rformat,
     'sb': lambda op, r1, r2, offset: lsformat('store', r1, r2, 0b00, offset),
     'sh': lambda op, r1, r2, offset: lsformat('store', r1, r2, 0b01, offset),
-    'sw': lambda op, r1, r2, offset: lsformat('store', r1, r2, 0b10, offset),
+    'sll': rformat,
+    'sllr': rformat,
+    'sra': rformat,
+    'srar': rformat,
+    'srl': rformat,
+    'srlr': rformat,
     'sub': rformat,
     'subu': rformat,
     'subi': iformat,
     'subiu': iformat,
-    'syscall': lambda x: rformat('syscall', 'r0', 'r0', 'r0'),
+    'sw': lambda op, r1, r2, offset: lsformat('store', r1, r2, 0b10, offset),
+    'trap': lambda x: rformat('trap', 'r0', 'r0', 'r0'),
     'xor': rformat,
     'xori': iformat 
 }
